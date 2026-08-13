@@ -23,3 +23,11 @@ go.work.sum
 
 # env file
 .env
+
+# 自定义
+release/
+log.txt
+caption_test.go
+
+# 配置文件
+.vs
