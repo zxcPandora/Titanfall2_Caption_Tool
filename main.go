@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-const version = "1.0.0"
+const version = "1.0.1"
 
 // logOutput - -l 时所有输出镜像到 log.txt
 var logOutput *os.File
@@ -304,17 +305,46 @@ func checkAfterBrace(content, path string) {
 	}
 }
 
-// checkLongBtWords - 检查超长词内含 BT
-// TTF2 引擎 bug: 无空格长词 (≥20 个 UTF-16 字符) 内含 "BT" 时, 词的第 20 字符起乱码。
-// 规避: 给 BT 前后加空格独立成词。
+// checkLongBtWords - 检查 BT 名字后内容超 19 字符 (说话者标签除外)
+// TTF2 引擎格式化问题 : BT 名字 (BT-7274 这类, BT+连字符数字) 之后,
+// 跨空格扫描到第一个标点或词尾的内容 ≥20 个 UTF-16 字符 → 从第 20 个起截断 (显示前 19 个)。
+// 40 字节样式化缓冲 = 20 字符 (19 显示 + null)。
+// 标点 (，。！？、；：…,.!?;:) 是隔断; 空格/连字符/数字是内容延续 (空格不算隔断, 用户实测)。
+// "BT:"/"BT：" (后跟冒号) 是说话者标签, 引擎正常处理, 不检查。
+// 规避: 给名字后内容加标点隔断 (如 "BT-7274，") 或断句。
 func checkLongBtWords(entries []CaptionEntry, path string) {
+	tagRe := regexp.MustCompile(`<[^>]*>`)
+	punctRe := regexp.MustCompile(`[，。！？、；：…─—,.!?;:]`)
+	nameRe := regexp.MustCompile(`^-[\w]+`)
 	for _, e := range entries {
-		for _, word := range strings.Fields(e.Text) {
-			if UTF16Len(word) > 19 && strings.Contains(word, "BT") {
-				fmt.Fprintf(os.Stderr,
-					"⚠ %s: 条目 \"%s\" 的词 \"%s\" (%d 字符) 内含 \"BT\", TTF2 引擎会从第 20 字符起乱码, 建议在 BT 前后加空格隔开\n",
-					path, e.Token, word, UTF16Len(word))
+		clean := tagRe.ReplaceAllString(e.Text, "")
+		// 引擎按词拼接后跨词扫描 (空格是内容延续), 检查在整个条目文本上进行
+		for btIdx := 0; btIdx < len(clean); {
+			i := strings.Index(clean[btIdx:], "BT")
+			if i < 0 {
+				break
 			}
+			btIdx += i
+			after := clean[btIdx+2:]
+			// 说话者: BT 后跟冒号 → 跳过
+			if strings.HasPrefix(after, ":") || strings.HasPrefix(after, "：") {
+				btIdx += 2
+				continue
+			}
+			// 名字 = BT + 连字符数字 (如 BT-7274)
+			if m := nameRe.FindString(after); m != "" {
+				after = after[len(m):]
+			}
+			// 到第一个标点或词尾 (空格/连字符/数字是内容延续)
+			if end := punctRe.FindStringIndex(after); end != nil {
+				after = after[:end[0]]
+			}
+			if UTF16Len(after) >= 20 {
+				fmt.Fprintf(os.Stderr,
+					"⚠ %s: 条目 \"%s\" 的 BT 后内容 \"%s\" (%d 字符 ≥20), TTF2 引擎从第 20 字符起截断, 建议加标点隔断\n",
+					path, e.Token, truncStr(after, 40), UTF16Len(after))
+			}
+			btIdx += 2
 		}
 	}
 }

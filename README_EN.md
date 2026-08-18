@@ -17,7 +17,7 @@ This tool provides packing, unpacking, verification, and inspection in one binar
 - ✅ **Name table**: `--table` restores real token names from a JSON hash→name map
 - ✅ **Auto encoding detection**: `.txt` in UTF-8 or UTF-16LE (BOM/statistical detection); `.dat` text is UTF-16LE (engine hard requirement)
 - ✅ **Drag & drop**: drop a file onto the exe to auto pack/unpack by extension
-- ✅ **Keyword word check**: warns about over-long words that trigger the TF2 engine corruption/truncation bug (see Known Issues)
+- ✅ **BT truncation check**: during pack, warns about content that would trigger the engine's subtitle truncation issue according to the detection rules (see Known Issues)
 - ✅ **`[english]` support**: skips `[english]`-prefixed fallback entries on pack (L4D2 source convention)
 - ✅ **Oversized entry guard**: entries larger than one block (8192 bytes) are rejected with an error
 - ✅ **`-v` / `-l`**: verbose output and log.txt logging
@@ -141,7 +141,7 @@ GOOS=windows GOARCH=386 go build -o titanfall2_caption_tool_windows386.exe .
 
 ## Known Issues
 
-1. **TF2 engine BT-word corruption/truncation bug**: the engine garbles any caption whose space-delimited word is ≥20 UTF-16 characters **and** contains `BT` (BT-7274's styled-glyph buffer overflows — an engine bug, not a tool bug). The tool warns about such words during pack. **Workaround: put spaces around `BT`/`BT-7274`/`BT7274`** (Respawn's own translations follow this style).
+1. **Garbling/truncation in captions containing BT**: the engine truncates any caption where the content **after a BT name** (`BT-7274` and similar: BT + hyphen + digits), scanned **across spaces** up to the first punctuation mark or end of text, is **≥20 UTF-16 characters** — it cuts off from character 20 (a 40-byte styled-glyph buffer = 19 chars displayed + null; an engine formatting issue, not a tool bug). **Punctuation acts as a break** (`，。！？、；：…─—,.!?;:`); **spaces/hyphens/digits are content continuation** (e.g. `泰坦 BT-7274 已就緒歡迎...` with no punctuation triggers it); speaker tags `BT:`/`BT：` do not trigger. The tool checks by this rule and warns automatically during pack. **Workaround: put a punctuation break after the caption's BT name** (e.g. `BT-7274，`) or split the sentence.
 2. **`--no-align` breaks files**: the engine reads the data offset with 512-byte alignment assumed; unaligned files misread every caption. This option is for format research only — never use it for real output.
 
 ## References
