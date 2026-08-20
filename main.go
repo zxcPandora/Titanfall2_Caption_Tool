@@ -55,6 +55,10 @@ func padTrunc(s string, n int) string {
 }
 
 func main() {
+	// 启动横幅: 版本/作者/来源
+	fmt.Printf("Titanfall 2 Caption Tool v%s\n", version)
+	fmt.Printf("作者: zxcPandora | 来源: https://github.com/zxcPandora/titanfall2_caption_tool\n\n")
+
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(1)
